@@ -1,4 +1,8 @@
-(ns examples.asset-models)
+(ns examples.asset-models
+  (:require [clojure-csv.core :as csv]
+            [incanter.stats :as is]
+            [incanter.core :as ic])
+  (:use [clj-mcmc core random distributions helpers]))
 
 (set! *warn-on-reflection* true)
 
@@ -6,7 +10,7 @@
 
 (defn black-scholes-vasicek-loglik
   "Loglikelihood function of the black-scholes-vasicek model"
-  [mu sS ka be sR ro ^floats stocks ^floats rs dt]
+  [[mu sS ka be sR ro] ^floats stocks ^floats rs dt]
   (let [n (int (alength stocks))
         ekdt (Math/exp (- (* ka dt)))
         t_1_ekdt (/ (* be (- 1.0 ekdt)) ka)
@@ -52,10 +56,32 @@
           (recur (inc i)
                  (float
                   (- sum
-                     (Math/log (* 2.0 Math/PI (sqrt rho_comp) eta_S eta_r))
+                     (Math/log (* 2.0 Math/PI (Math/sqrt rho_comp) eta_S eta_r))
                      (/ (+ (/ (sq x) eta_S_sq)
                            (/ (* -2.0 ro x y) (* eta_S eta_r))
                            (/ (sq y) eta_r_sq))
                         (* 2.0 rho_comp))))))
         sum))))
 
+
+;; read in data
+(def dataset-location 
+  "/home/paul/wd/clean/data/in/DaxMoneyCallCombined_1996_12_31-2006_12_31.csv")
+
+(def dataset 
+  (let [csv (csv/parse-csv (slurp dataset-location))]
+    {:stocks (float-array (for [[s r] csv :while r] (read-string s)))
+     :rs (float-array (for [[_ r] csv :while r] (read-string r)))}))
+
+(defn sample-parameters []
+  (let [start-params [0.1 0.1 0.1 0.1 0.1 0.1]
+        proposal-fn (fn [old rand] (to-multivar-normal rand :mu (ic/matrix old)))
+        proposal-dens (fn [x] (pdf-multivar-normal x))
+        true-dens (fn [x] (Math/exp (black-scholes-vasicek-loglik x
+                                                                  (:stocks dataset)
+                                                                  (:rs dataset) 1/12)))]
+    (mcmc start-params
+          proposal-fn
+          proposal-dens
+          true-dens
+          (rand-stream))))
