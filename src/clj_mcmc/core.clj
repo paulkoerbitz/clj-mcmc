@@ -3,20 +3,34 @@
   (:use [clj-mcmc distributions helpers]))
 
 (defn- test-candidate [old cand propose-dens true-dens u]
-  (let [denom (* (true-dens old) (propose-dens cand))]
+  (let [denom (* (true-dens old) (propose-dens old cand))]
     (if (and (not= denom 0.)
-             (> (/ (* (true-dens cand) (propose-dens old)) denom) u))  
+             (> (/ (* (true-dens cand) (propose-dens old old)) denom) u))  
       cand
       old)))
 
-(defn mcmc [start propose-fn propose-dens true-dens rnd-stream]
-  (let [n (count start)]
+(defn- test-w-logs [old cand propose-dens true-dens u]
+  (if (> (- (+ (true-dens cand) (propose-dens old old))
+            (+ (true-dens old) (propose-dens old cand)))
+         (Math/log u))
+    cand
+    old))
+
+(defn mcmc [start propose-fn propose-dens true-dens rnd-stream
+            & {:keys [logs] :or {logs true}}]
+  (let [n       (count start)
+        test-fn (if logs test-w-logs test-candidate)]
     (cons start
         (lazy-seq
-         (let [u (to-uniform (first rnd-stream))
-               rnd (take n (next rnd-stream))
+         (let [u        (to-uniform (first rnd-stream))
+               rnd      (vec (take n (next rnd-stream))) 
                rnd-next (nthnext rnd-stream (+ n 1))
-               cand (propose-fn start rnd)
-               next (test-candidate start cand propose-dens true-dens u)
-               ]
+               cand     (propose-fn start rnd)
+               next     (test-fn start cand propose-dens true-dens u)]
+           
            (mcmc next propose-fn propose-dens true-dens rnd-next)))))) 
+
+(defn thin [n coll]
+  (when (seq coll)
+    (cons (first coll) (lazy-seq (thin n (nthnext coll (inc n)))))))
+
