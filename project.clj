@@ -4,4 +4,4 @@
                  [incanter "1.2.3"]
                  [clojure-csv/clojure-csv "1.3.2"]
                  [midje "1.3-alpha4"]]
-  )
+  :main examples.asset-model.main)

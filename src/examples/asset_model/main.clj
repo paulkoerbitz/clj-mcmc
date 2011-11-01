@@ -50,7 +50,9 @@
          (apply str (conj (interpose "," (map #(format "%9.7f" %) line)) "\n")))))
     result))
 
-(defn main []
+(defn -main []
   (let [jobs (read-string (slurp *job-file*))]
     (doseq [job jobs]
-      (estimate-parameters job))))
+      (println "Doing job " job)
+      (when (map? job) 
+        (estimate-parameters job)))))
